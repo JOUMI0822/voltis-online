@@ -172,6 +172,22 @@ io.on("connection", socket => {
     socket.to(roomId).volatile.emit("game:peer-input", { from: socket.id, input });
   });
 
+  // 상태 스냅샷 중계 (각 클라이언트가 자기 캐릭터의 위치/체력을 전송)
+  socket.on("game:state", (p = {}) => {
+    const roomId = socketRoom.get(socket.id);
+    const room = rooms.get(roomId);
+    if (!room || !room.players.has(socket.id)) return;
+    const info = socketInfo.get(socket.id);
+    const now = Date.now();
+    if (info && now - (info.lastStateAt || 0) < 30) return;
+    if (info) info.lastStateAt = now;
+    const n = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
+    socket.to(roomId).volatile.emit("game:peer-state", {
+      x: n(p.x, 0, 2400), y: n(p.y, -400, 700), hp: n(p.hp, 0, 1000), max: n(p.max, 1, 1000),
+      f: n(p.f, -7, 7), g: p.g ? 1 : 0, d: p.d ? 1 : 0
+    });
+  });
+
   socket.on("game:ping", (_payload, ack = () => {}) => ack({ now: Date.now() }));
 
   socket.on("disconnect", () => {
